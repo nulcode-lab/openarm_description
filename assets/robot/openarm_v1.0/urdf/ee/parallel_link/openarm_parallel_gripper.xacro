@@ -14,7 +14,12 @@ limitations under the License.
 
 <robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="parallel_gripper">
 
-  <xacro:macro name="openarm_parallel_gripper" params="connected_to:='' arm_type arm_prefix:='' ee_type ee_inertials ee_kinematics ee_kinematics_link ee_joints_limits rpy_ee:='0 0 0' xyz_ee:='0 0 0' tcp_xyz:='0 0 0' tcp_rpy:='0 0 0' description_pkg:=openarm_description">
+  <!--
+    tcp_xyz: offset from hand link to hand_tcp along +Z of hand (metres).
+    Default 0 0 0.0835 is the calibrated fingertip-centre offset for the
+    parallel-link gripper — measured from the hand frame origin.
+  -->
+  <xacro:macro name="openarm_parallel_gripper" params="connected_to:='' arm_type arm_prefix:='' ee_type ee_inertials ee_kinematics ee_kinematics_link ee_joints_limits rpy_ee:='0 0 0' xyz_ee:='0 0 0' tcp_xyz:='0 0 0.0835' tcp_rpy:='0 0 0' description_pkg:=openarm_description">
 
     <xacro:property name="ee_prefix" default=""/>
 
@@ -22,11 +27,33 @@ limitations under the License.
       <xacro:property name="ee_prefix" value="openarm_${arm_prefix}" />
     </xacro:unless>
 
+    <link name="${ee_prefix}hand">
+      <visual name="${ee_prefix}hand_visual">
+        <xacro:openarm-ee-kinematics-link config="${ee_kinematics_link}" name="hand" />
+        <geometry>
+          <mesh filename="package://${description_pkg}/assets/end_effector/parallel_link/meshes/visual/hand.dae" scale="0.001 0.001 0.001"/>
+        </geometry>
+      </visual>
+      <collision name="${ee_prefix}hand_collision">
+        <xacro:openarm-ee-kinematics-link config="${ee_kinematics_link}" name="hand" />
+        <geometry>
+          <mesh filename="package://${description_pkg}/assets/end_effector/parallel_link/meshes/collision/hand.stl" scale="0.001 0.001 0.001" />
+        </geometry>
+      </collision>
+      <xacro:ee-inertials name="hand"/>
+    </link>
+
+    <joint name="${ee_prefix}hand_joint" type="fixed">
+      <xacro:openarm-ee-kinematics config="${ee_kinematics}" name="hand" />
+      <parent link="${connected_to}" />
+      <child link="${ee_prefix}hand" />
+    </joint>
+
     <link name="${ee_prefix}hand_tcp" />
 
     <joint name="${ee_prefix}hand_tcp_joint" type="fixed">
       <origin xyz="${tcp_xyz}" rpy="${tcp_rpy}" />
-      <parent link="${connected_to}" /> <child link="${ee_prefix}hand_tcp" />
+      <parent link="${ee_prefix}hand" /> <child link="${ee_prefix}hand_tcp" />
     </joint>
 
     <link name="${ee_prefix}left_finger">
