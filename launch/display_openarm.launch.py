@@ -13,7 +13,6 @@
 # limitations under the License.
 import os
 
-import xacro
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription, LaunchContext
 from launch.actions import DeclareLaunchArgument, OpaqueFunction
@@ -53,44 +52,56 @@ def robot_state_publisher_spawner(
     ros2_control,
     use_fake_hardware,
     fake_sensor_commands,
+    use_flat_urdf,
 ):
     arm_type_str = context.perform_substitution(arm_type)
     folder_name, file_name = resolve_arm_config(arm_type_str)
 
     pkg_share = get_package_share_directory("openarm_description")
 
-    xacro_path = os.path.join(
-        pkg_share,
-        "assets",
-        "robot",
-        folder_name,
-        "urdf",
-        file_name,
+    flat_urdf_name = file_name.replace(".urdf.xacro", "_bimanual.urdf")
+    flat_urdf_path = os.path.join(
+        pkg_share, "assets", "robot", folder_name, "urdf",
+        flat_urdf_name,
     )
 
-    is_v1 = any(x in arm_type_str for x in ("1.0", "10", "1_0"))
-
-    if is_v1:
-        mappings = {
-            "arm_type": arm_type_str,
-            "body_type": "v10",
-            "bimanual": context.perform_substitution(bimanual),
-            "ros2_control": context.perform_substitution(ros2_control),
-            "use_fake_hardware": context.perform_substitution(use_fake_hardware),
-            "fake_sensor_commands": context.perform_substitution(fake_sensor_commands),
-        }
+    if context.perform_substitution(use_flat_urdf) == "true" and os.path.exists(flat_urdf_path):
+        with open(flat_urdf_path, "r") as f:
+            robot_description = f.read()
     else:
-        mappings = {
-            "arm_type": arm_type_str,
-            "robot_preset": context.perform_substitution(robot_preset),
-            "collapse_internal_empty_links": context.perform_substitution(collapse_internal_empty_links),
-            "emit_grasp_frame": context.perform_substitution(emit_grasp_frame),
-        }
+        xacro_path = os.path.join(
+            pkg_share,
+            "assets",
+            "robot",
+            folder_name,
+            "urdf",
+            file_name,
+        )
 
-    robot_description = xacro.process_file(
-        xacro_path,
-        mappings=mappings,
-    ).toprettyxml(indent="  ")
+        is_v1 = any(x in arm_type_str for x in ("1.0", "10", "1_0"))
+
+        if is_v1:
+            mappings = {
+                "arm_type": arm_type_str,
+                "body_type": "v10",
+                "bimanual": context.perform_substitution(bimanual),
+                "ros2_control": context.perform_substitution(ros2_control),
+                "use_fake_hardware": context.perform_substitution(use_fake_hardware),
+                "fake_sensor_commands": context.perform_substitution(fake_sensor_commands),
+            }
+        else:
+            mappings = {
+                "arm_type": arm_type_str,
+                "robot_preset": context.perform_substitution(robot_preset),
+                "collapse_internal_empty_links": context.perform_substitution(collapse_internal_empty_links),
+                "emit_grasp_frame": context.perform_substitution(emit_grasp_frame),
+            }
+
+        import xacro
+        robot_description = xacro.process_file(
+            xacro_path,
+            mappings=mappings,
+        ).toprettyxml(indent="  ")
 
     return [
         Node(
@@ -143,6 +154,11 @@ def generate_launch_description():
         "fake_sensor_commands",
         default_value="false",
     )
+    use_flat_urdf_arg = DeclareLaunchArgument(
+        "use_flat_urdf",
+        default_value="false",
+        description="Use pre-flattened URDF instead of running xacro.",
+    )
 
     arm_type = LaunchConfiguration("arm_type")
     robot_preset = LaunchConfiguration("robot_preset")
@@ -153,6 +169,7 @@ def generate_launch_description():
     ros2_control = LaunchConfiguration("ros2_control")
     use_fake_hardware = LaunchConfiguration("use_fake_hardware")
     fake_sensor_commands = LaunchConfiguration("fake_sensor_commands")
+    use_flat_urdf = LaunchConfiguration("use_flat_urdf")
 
     pkg_share = get_package_share_directory("openarm_description")
 
@@ -166,6 +183,7 @@ def generate_launch_description():
         ros2_control_arg,
         use_fake_hardware_arg,
         fake_sensor_commands_arg,
+        use_flat_urdf_arg,
         OpaqueFunction(
             function=robot_state_publisher_spawner,
             args=[
@@ -177,6 +195,7 @@ def generate_launch_description():
                 ros2_control,
                 use_fake_hardware,
                 fake_sensor_commands,
+                use_flat_urdf,
             ],
         ),
         Node(
